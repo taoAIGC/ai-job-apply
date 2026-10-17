@@ -1,0 +1,26 @@
+# ⚠️ 绝不能进仓库的个人数据（含真实简历/话术/投递记录）
+profile.json
+messages.json
+send-log.json
+contacted.json
+pool.json
+jd.json
+skipped.json
+src.json
+daily-cap.json
+company-stats.md
+*.bak*
+*.tmp.*
+
+# 运行产物
+logs/
+*.log
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# 编辑器/系统
+.DS_Store
+.idea/
+.vscode/
