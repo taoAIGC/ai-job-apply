@@ -144,6 +144,12 @@ JS 常量里，按 `references/zhipin-dom-and-flow.md` 自查即可。项目按�
 **Q：支持其他招聘平台吗？** 目前只做了 BOSS 直聘。桥接层与平台无关，
 欢迎按适配器接口贡献智联/猎聘实现。
 
+## 深入文档
+
+- [docs/1-usage-and-config.md](docs/1-usage-and-config.md) —— 用户教程：初始化配置的三种方式、profile.json 全字段说明、本机数据文件、典型工作流
+- [docs/2-execution-details.md](docs/2-execution-details.md) —— 执行细节：「推荐标签」与「搜索找岗位」双线供给的分工、排序与枯竭策略
+- [docs/3-humanized-behavior.md](docs/3-humanized-behavior.md) —— 拟人化设计全解：滚动/节奏/话术/额度/风控的每一处参数与原则
+
 ## License
 
 MIT + 非商业附加条款，见 [LICENSE](LICENSE) 与 [DISCLAIMER.md](DISCLAIMER.md)。
