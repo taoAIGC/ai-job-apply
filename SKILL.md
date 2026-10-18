@@ -1,5 +1,6 @@
 ---
-name: boss-zhipin-apply
+name: 闪电AI求职助手
+name_en: ai-job-apply
 description: |
   BOSS 直聘（zhipin.com）求职投递全流程自动化。This skill should be used when the user wants to
   search jobs, screen postings, mass-send tailored greetings (打招呼/立即沟通/投递简历), or track
@@ -13,12 +14,12 @@ description_en: |
   End-to-end automation for applying to jobs on BOSS Zhipin (zhipin.com): collect postings,
   screen them against the user's own resume profile, write a tailored greeting for each job by
   reading its description, and batch-send via the user's own logged-in browser.
-version: 2.0.0
+version: 2.1.0
 license: 仅供个人求职自用。使用者需自行遵守 BOSS 直聘用户协议，并承担账号相关风险。见「使用前必读」。
 agent_created: true
 ---
 
-# BOSS 直聘投递自动化（分发版）
+# 闪电AI求职助手 · BOSS 直聘投递自动化（分发版）
 
 ## 用途
 
