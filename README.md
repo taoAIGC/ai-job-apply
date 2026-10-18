@@ -1,108 +1,55 @@
 # boss-zhipin-auto-apply
 
-BOSS 直聘求职投递全流程自动化：**收岗位 → 按画像筛选 → AI 逐条读 JD 写定制话术 → 拟人化节奏批量发送 → 回执核验**。
+一个帮你**自动在 BOSS 直聘上投简历、打招呼**的工具。
 
-所有操作都跑在**你自己已登录的浏览器**里（通过本地浏览器桥接扩展），不接触账号密码、不伪造请求、不碰服务端接口。
+它最不一样的地方：不是群发同一句「您好，我对这个岗位很感兴趣」，而是让 **AI 先读懂每个岗位的招聘要求，再结合你的真实经历，为每一个岗位单独写一句打招呼的话**——让 HR 一眼看出你是认真看过他们岗位的。
 
-> 🇨🇳 本项目为中文求职场景设计，README 以中文为主。
-
----
-
-## ⚠️ 使用前必读（先读这个，再决定要不要用）
-
-**[完整免责声明见 DISCLAIMER.md](DISCLAIMER.md)**，要点：
-
-1. 本项目与 BOSS 直聘官方**无任何关联与授权**。平台用户协议通常不允许自动化批量投递，使用本项目**可能导致账号被限制或封禁，风险自负**。
-2. 本项目**仅供个人求职自用**，禁止用于代投服务、批量营销或任何商业用途（见 LICENSE 附加条款）。
-3. 请保持克制：只投你真正感兴趣的岗位。消息以你的名义发出，内容你负全责。
-4. 代码中的拟人化间隔、公司黑名单、每日节奏控制是**负责任使用的底线**，请不要调低或移除。
-
-如果以上任何一条你不能接受，请不要使用本项目。
+> 🇨🇳 中文求职场景工具，本页全部是大白话说明；开发细节放在 docs/ 目录。
 
 ---
 
-## 架构
+## ⚠️ 开始前，请先确认你能接受这四条
 
-```
-┌────────────────────────────  本机  ────────────────────────────┐
-│                                                                │
-│  collect_jobs / refresh_pool      fetch_jd                     │
-│  （搜索页滚动收池子）──► pool.json ──► 筛选 ──► jd.json          │
-│        ▲                              │                        │
-│        │                              ▼                        │
-│  浏览器扩展 ◄── webbridge 守护    AI 读 JD 逐条写话术            │
-│  （用户已登录的浏览器）              ──► messages.json           │
-│        ▲                              │                        │
-│        │                              ▼                        │
-│  send_greetings / run_pipeline / run_forever                   │
-│  （拟人化节奏发送 + 回执核验 + 风控/封顶熔断）                     │
-└────────────────────────────────────────────────────────────────┘
-```
+1. 这个工具和 BOSS 直聘官方**没有任何关系**。平台规则不允许自动化投递，用了它**你的账号有可能被限制或封号**，这个风险由你自己承担。
+2. 只能**给自己求职用**。不能拿去帮别人批量投、不能拿它赚钱。
+3. 只投你**真正想去**的岗位。消息是以你的名义发出去的，写了什么你负责。
+4. 工具里的投递节奏（间隔、休息）是保护你账号的底线，**不要改小**。
 
-- **状态与个人数据**全部落在 `~/.boss-apply/`（本机，不进仓库）。
-- **画像配置**：`assets/profile-template.json` 是空白骨架，首次运行
-  `setup_wizard.py` 生成你自己的 `profile.json`。
+接受不了其中任何一条，就请不要使用。
 
-## 组件一览
+---
 
-| 文件 | 职责 |
-|---|---|
-| `scripts/collect_jobs.py` | 搜索页滚动收集岗位池（多城市×关键词） |
-| `scripts/refresh_pool.py` | 双线刷池：频道标签 + 城市×关键词×薪资档 |
-| `scripts/fetch_jd.py` | 批量抓取候选岗位详情页 JD |
-| `scripts/send_greetings.py` | 核心发送端：导航→立即沟通→填话术→发送→核验 |
-| `scripts/run_pipeline.py` | 流水线模式：边收集边投递，小批量+冷却 |
-| `scripts/run_forever.py` | 守护模式：队列投完待命，来了新话术自动续投 |
-| `scripts/daemonize.py` | 后台守护化（双 fork，macOS 兼容） |
-| `scripts/doctor.py` | 环境体检：桥接/扩展/登录态一键诊断 |
-| `scripts/setup_wizard.py` | 首次配置引导，生成 profile.json |
-| `scripts/webbridge.py` | 浏览器桥接封装（唯一的外部交互层） |
-| `references/zhipin-dom-and-flow.md` | BOSS 页面 DOM 特征与投递流程笔记 |
+## 你需要准备的东西（就三样）
 
-## 环境要求
+1. **一台电脑**，浏览器里已登录 BOSS 直聘（网页版）。
+2. **Python 3.10 或更高版本**。
+   检查方法：打开「终端」（Mac）或「命令提示符/PowerShell」（Windows），输入
+   `python3 --version`（Windows 输入 `python --version`），能显示 `3.x.x` 就行。
+   没装的话去 [python.org](https://www.python.org/downloads/) 下载安装。
+3. **Kimi 浏览器桥接**（工具靠它来操作你的浏览器，不碰你的密码）。
+   在终端粘贴这条命令回车即可：
+   ```bash
+   curl -fsSL https://cdn.kimi.com/webbridge/install.sh | bash
+   ```
+   装好后打开 Kimi 浏览器侧边栏 → 设置 → 本地智能体远程控制 → 连接。
 
-- Python **3.10+**（**零第三方依赖**，纯标准库）
-- 一个已登录 BOSS 直聘的桌面浏览器
-- 浏览器桥接：[kimi-webbridge](https://www.kimi.com/) 本地守护 + 扩展
-  （默认 `127.0.0.1:10086`，可用环境变量 `BOSS_BRIDGE_ADDR` / `BOSS_BRIDGE_BIN` 覆盖）
+工具本身**不需要安装任何插件包**，下载就能用。
 
-## 快速开始
+## 下载这个工具
 
-```bash
-git clone https://github.com/<you>/boss-zhipin-auto-apply.git
-cd boss-zhipin-auto-apply
+- 会用 Git 的：`git clone https://github.com/taoAIGC/boss-zhipin-auto-apply.git`
+- 不会用的：打开本仓库页面 → 点绿色 **Code** 按钮 → **Download ZIP** → 解压。
 
-# 1. 首次配置：生成 ~/.boss-apply/profile.json（城市/关键词/薪资底线）
-python3 scripts/setup_wizard.py
+---
 
-# 2. 环境体检：桥接守护 + 浏览器扩展 + 登录态
-python3 scripts/doctor.py
+## 五步开始投递
 
-# 3. 收池子（示例：北京，3 个关键词，各滚 6 轮）
-python3 scripts/collect_jobs.py --keywords "AI产品经理" "AI解决方案" "Agent产品经理" --cities 101010100
+**以下所有命令都在「终端」里、在解压出来的文件夹里运行。**
+（Mac：右键文件夹 → 新建位于文件夹位置的终端窗口；Windows：在文件夹地址栏输入 `cmd` 回车）
 
-# 4. 抓 JD（只抓通过了画像筛选的候选）
-python3 scripts/fetch_jd.py --limit 20
+### 第 1 步：把你的情况告诉工具
 
-# 5. 让 AI 读 jd.json，逐条写定制话术写入 ~/.boss-apply/messages.json
-#    写作规范在 profile.json 的 ai_message_rules 段
-#    （格式：{"msgs": {"<job_id>": {"text": "…"}}}）
-
-# 6a. 小批量流水线（边收边投，推荐）
-python3 scripts/run_pipeline.py --target 50
-
-# 6b. 或守护模式：投完队列不退出，来新话术自动续投
-python3 scripts/daemonize.py python3 scripts/run_forever.py
-```
-
-先跑 `--dry-run` 看发送端会投给谁，再实投。
-
-## 必要信息示例（照着填就行）
-
-初始化要准备的「必要信息」= **你是谁、想去哪、找什么岗、薪资底线、真实经历**。
-以下示例人物纯属虚构。
-
-### ① 配置草稿（AI 引导模式 `--from-json` 的输入）
+新建一个文本文件（比如叫 `draft.json`），照下面改成就你的信息：
 
 ```json
 {
@@ -110,7 +57,6 @@ python3 scripts/daemonize.py python3 scripts/run_forever.py
   "cities": ["北京", "杭州"],
   "keywords": ["AI产品经理", "大模型产品经理", "Agent产品经理"],
   "salary_min_k": 30,
-  "channels": ["AI产品经理(北京)"],
   "resume": {
     "summary": "5 年 B 端产品经验，近 2 年专注大模型应用落地",
     "current": "某电商公司 · 高级产品经理（2022.06-至今）",
@@ -119,108 +65,109 @@ python3 scripts/daemonize.py python3 scripts/run_forever.py
       "搭建 RAG 知识库，检索准确率从 72% 提升到 91%",
       "推动 3 条业务线接入统一的 Prompt 评测体系"
     ]
-  },
-  "exclude_extra": "军工|涉密",
-  "note": "不接受纯远程岗位"
+  }
 }
 ```
+
+每个字段是什么意思：
+
+| 你填的 | 意思 |
+|---|---|
+| `owner` | 你的称呼（只是日志里显示，随便写） |
+| `cities` | 你想去的城市，中文名就行 |
+| `keywords` | 搜岗位用的关键词，想找什么岗就写什么，写 3 个以上 |
+| `salary_min_k` | 低于这个薪资（K=千元/月）的岗位一律不投 |
+| `resume.summary` / `current` | 一句话介绍你自己、你现在的工作 |
+| `resume.highlights` | **最重要**：你的经历亮点，尽量带上数字成绩。AI 写打招呼的话全靠这个，别编造 |
+
+然后运行（Windows 把 `python3` 换成 `python`）：
 
 ```bash
 python3 scripts/setup_wizard.py --from-json draft.json
 ```
 
-要点：`highlights` 是 AI 写话术的**唯一素材**，务必真实、尽量带量化指标；
-`keywords` 至少 3 个；`cities` 支持中文名（内置 22 城）或 BOSS 搜索页 URL 里的城市代码。
+### 第 2 步：体检
 
-### ② 生成的 profile.json（关键字段节选）
-
-```json
-{
-  "owner": "李同学",
-  "cities": [{"code": "101010100", "name": "北京"}, {"code": "101210100", "name": "杭州"}],
-  "keywords": ["AI产品经理", "大模型产品经理", "Agent产品经理"],
-  "salary_filter": {"min_k": 30, "mode": "upper", "strict": true},
-  "channels": ["AI产品经理(北京)"],
-  "use_recommend_tab": true,
-  "exclude_companies": ["字节", "抖音", "阿里", "腾讯", "蚂蚁"],
-  "exclude_text_markers": ["元/天", "天/周", "在校"]
-}
+```bash
+python3 scripts/doctor.py
 ```
 
-`salary_filter` 读法：`min_k=30 + mode=upper + strict=true` ⇒ **只投薪资区间上限 >30K**
-的岗位（20-30K、25-30K 被排除；25-40K、30-50K 通过）。`exclude_companies`
-是公司黑名单：公司名包含任一关键词即永久不投，适合把投过很多次的巨头整个集团排掉。
+它会检查浏览器桥接、登录状态、配置是否齐全，哪里不对会直接告诉你怎么修。**全绿再往下走。**
 
-### ③ AI 写好的话术（messages.json，一条的样子）
+### 第 3 步：收集岗位
+
+```bash
+python3 scripts/refresh_pool.py
+```
+
+工具会自动翻 BOSS 的岗位列表，把符合你关键词和城市的岗位收集起来（去重）。这一步可以多跑几次，每次都能捞到新岗位。
+
+### 第 4 步：让 AI 写打招呼的话（通常由 AI 助手代劳）
+
+这一步一般不用你自己动手：告诉你的 AI 助手「帮我把 `~/.boss-apply/jd.json` 里的岗位逐个写打招呼话术，写进 `~/.boss-apply/messages.json`」即可（Mac 上 `~` 就是你的个人文件夹）。写好后的样子：
 
 ```json
 {
   "msgs": {
     "44bcea12e8bc3ada0nN62tu7E1tT": {
-      "text": "您好！看到岗位要求搭建 Agent 编排与 RAG 评测体系，正是我去年从 0 到 1 做过的：智能客服 Agent 平台上线后人工会话占比下降 40%，RAG 检索准确率做到 91%。评测这块也踩过坑，有一套现成的指标体系可以直接迁移。期待和您聊聊。"
+      "text": "您好！看到岗位要求搭建 Agent 编排与 RAG 评测体系，正是我去年从 0 到 1 做过的：智能客服 Agent 平台上线后人工会话占比下降 40%，RAG 检索准确率做到 91%。期待和您聊聊。"
     }
   }
 }
 ```
 
-键是岗位 id（JD 详情页 URL 里的那串）；`text` 必须引用**该岗位 JD 的具体内容**、
-素材只来自 `resume.highlights`、结尾统一「期待和您聊聊。」、单条 120–220 字。
-写好后再运行发送端，只有出现在 `msgs` 里的岗位才会被投递（话术门禁）。
+规则就三条：**引用对方岗位的具体要求、只说你的真实经历、结尾一句「期待和您聊聊。」**
 
-> 完整字段说明见 [docs/1-usage-and-config.md](docs/1-usage-and-config.md)。
-
-## 内置的负责任使用设计
-
-- **AI 话术门禁**：没有为该岗位逐条生成定制话术就不发送，杜绝群发模板。
-- **公司黑名单**：`profile.json` 的 `exclude_companies` 支持集团级关键词，
-  命中即永久不投（选人 + 发送端双重拦截），避免反复骚扰同一家公司。
-- **严格薪资过滤**：`salary_filter` 支持「上限 >N K」等精确口径。
-- **拟人化节奏**：岗位间隔 4–9s、每 4 条长休息、随机滚动停顿、城市×关键词乱序。
-- **三态额度处理**：软提醒自动重发、真封顶熔断当日停止、风控命中立即退出。
-- **回执核验**：每条发送后回到详情页确认按钮状态，失败不虚报。
-
-## 换桥接实现（适配器接口）
-
-所有浏览器交互都收敛在 `scripts/webbridge.py`，对外只有 6 个动作。
-想接 Playwright / Selenium，实现同样签名即可，上层脚本零改动：
-
-| 函数 | 语义 |
-|---|---|
-| `ensure_daemon()` | 确保桥接可用，返回地址 |
-| `check_extension(addr)` | 返回 `(ok, message)` |
-| `navigate(url, session, addr)` | 打开页面 |
-| `ev(js_code, session, addr)` | 执行 JS 并返回值（列表页收集/页面探测全靠它） |
-| `fill(selector, value, session, addr)` | 向输入框填文本（聊天框） |
-| `call(action, args, session, addr)` | 通用动作入口 |
-
-## 测试与 CI
+### 第 5 步：开始投递
 
 ```bash
-python3 -m unittest discover -s tests -v     # 纯函数测试，无需浏览器
+python3 scripts/run_pipeline.py --dry-run    # 先预览：会显示「将投给谁、话术是什么」，不发消息
+python3 scripts/run_pipeline.py              # 确认没问题后，正式投递
 ```
 
-解析器（标题/公司名/薪资解码）、黑名单匹配、风控词表等核心逻辑都有单测，
-GitHub Actions 会自动跑 lint（ruff）+ 测试。
+正式投递后你只需要看着终端就行。它会：
 
-## FAQ
+- 一条一条慢慢投（间隔几秒到十几秒，每投 4 条休息一会儿）——**故意很慢，为了安全**；
+- 投完一个岗位就回去核实有没有真的发出去，没发出去不算数；
+- 平台提示「今天的沟通次数用完了」就自动收工，第二天再跑一次即可；
+- 想**持续自动投**的，用 `python3 scripts/daemonize.py python3 scripts/run_forever.py`，AI 补写了新话术它会自己接着投。
 
-**Q：会被封号吗？** 有可能。见 DISCLAIMER。请自行评估，建议小号先行。
+## 想调整设置？改 `~/.boss-apply/profile.json` 就行
 
-**Q：为什么发了消息但脚本报失败？** 发送后脚本会回详情页核验「继续沟通」
-按钮状态，核验不过就记失败——宁可少记不可虚报。
+| 你想… | 改哪里 |
+|---|---|
+| 提高薪资门槛 | `salary_filter.min_k`（比如 40 就是只投月薪 4 万以上的） |
+| 某些公司再也不投（比如投过很多次的大厂） | 加 `exclude_companies`，写公司名里的关键字即可，如 `["字节", "阿里", "腾讯"]`，整个集团连子公司一起排除 |
+| 不想投某类岗位（比如销售岗） | 在 `exclude` 的正则末尾追加，如 `\|销售\|地推` |
+| 换城市、加关键词 | `cities` / `keywords` |
 
-**Q：平台改版后失效了？** BOSS 前端 DOM 常改。选择器集中在各脚本顶部的
-JS 常量里，按 `references/zhipin-dom-and-flow.md` 自查即可。项目按现状
-（as-is）提供，不承诺跟进每次改版。
+改完不需要重启什么，下次运行自动生效。
 
-**Q：支持其他招聘平台吗？** 目前只做了 BOSS 直聘。桥接层与平台无关，
-欢迎按适配器接口贡献智联/猎聘实现。
+## 常见问题
 
-## 深入文档
+**Q：会被封号吗？**
+有可能，谁也不能保证。所以请小额度试用、别贪多。本工具刻意做得很慢、很克制（随机间隔、定时休息、绝不群发模板），就是为了把风险降到最低，但不能降为零。
 
-- [docs/1-usage-and-config.md](docs/1-usage-and-config.md) —— 用户教程：初始化配置的三种方式、profile.json 全字段说明、本机数据文件、典型工作流
-- [docs/2-execution-details.md](docs/2-execution-details.md) —— 执行细节：「推荐标签」与「搜索找岗位」双线供给的分工、排序与枯竭策略
-- [docs/3-humanized-behavior.md](docs/3-humanized-behavior.md) —— 拟人化设计全解：滚动/节奏/话术/额度/风控的每一处参数与原则
+**Q：我的一天能投多少个？**
+平台自己有每日上限，到了它会提示，工具就自动停了。建议以平台额度为准，不要想办法突破。
+
+**Q：话术是模板吗？会不会每条都一样？**
+不是模板。每个岗位都是 AI 读完那条岗位的招聘要求后单独写的，写的内容还必须和你的真实经历对得上。重复、群发、一看就是机器发的消息，这个工具的设计目标就是杜绝它们。
+
+**Q：我的简历信息安全吗？**
+所有个人信息只存在**你自己电脑**的一个文件夹里（`~/.boss-apply/`），不经过任何服务器，这个开源仓库里也不含任何人的简历。唯一对外的动作，是以你的浏览器身份给 HR 发消息。
+
+**Q：为什么跑到一半停了？**
+通常是三种情况：平台提示今天次数用完了（第二天再跑）、检测到需要人工处理的验证提示（打开浏览器看看，按提示处理后再跑）、或者收集到的岗位都投完了（重新跑第 3 步收集新岗位）。
+
+**Q：BOSS 改版后不好用了怎么办？**
+平台页面经常改，工具可能某天就失效。欢迎提 Issue 描述现象，或等更新。
+
+## 想了解更多
+
+- [docs/1-usage-and-config.md](docs/1-usage-and-config.md) —— 全部可配置项详解
+- [docs/2-execution-details.md](docs/2-execution-details.md) —— 它是怎么找岗位的（推荐标签 + 主动搜索）
+- [docs/3-humanized-behavior.md](docs/3-humanized-behavior.md) —— 它为什么这么「慢」
 
 ## License
 
