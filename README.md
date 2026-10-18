@@ -97,6 +97,78 @@ python3 scripts/daemonize.py python3 scripts/run_forever.py
 
 先跑 `--dry-run` 看发送端会投给谁，再实投。
 
+## 必要信息示例（照着填就行）
+
+初始化要准备的「必要信息」= **你是谁、想去哪、找什么岗、薪资底线、真实经历**。
+以下示例人物纯属虚构。
+
+### ① 配置草稿（AI 引导模式 `--from-json` 的输入）
+
+```json
+{
+  "owner": "李同学",
+  "cities": ["北京", "杭州"],
+  "keywords": ["AI产品经理", "大模型产品经理", "Agent产品经理"],
+  "salary_min_k": 30,
+  "channels": ["AI产品经理(北京)"],
+  "resume": {
+    "summary": "5 年 B 端产品经验，近 2 年专注大模型应用落地",
+    "current": "某电商公司 · 高级产品经理（2022.06-至今）",
+    "highlights": [
+      "主导智能客服 Agent 平台 0→1，人工会话占比下降 40%",
+      "搭建 RAG 知识库，检索准确率从 72% 提升到 91%",
+      "推动 3 条业务线接入统一的 Prompt 评测体系"
+    ]
+  },
+  "exclude_extra": "军工|涉密",
+  "note": "不接受纯远程岗位"
+}
+```
+
+```bash
+python3 scripts/setup_wizard.py --from-json draft.json
+```
+
+要点：`highlights` 是 AI 写话术的**唯一素材**，务必真实、尽量带量化指标；
+`keywords` 至少 3 个；`cities` 支持中文名（内置 22 城）或 BOSS 搜索页 URL 里的城市代码。
+
+### ② 生成的 profile.json（关键字段节选）
+
+```json
+{
+  "owner": "李同学",
+  "cities": [{"code": "101010100", "name": "北京"}, {"code": "101210100", "name": "杭州"}],
+  "keywords": ["AI产品经理", "大模型产品经理", "Agent产品经理"],
+  "salary_filter": {"min_k": 30, "mode": "upper", "strict": true},
+  "channels": ["AI产品经理(北京)"],
+  "use_recommend_tab": true,
+  "exclude_companies": ["字节", "抖音", "阿里", "腾讯", "蚂蚁"],
+  "exclude_text_markers": ["元/天", "天/周", "在校"]
+}
+```
+
+`salary_filter` 读法：`min_k=30 + mode=upper + strict=true` ⇒ **只投薪资区间上限 >30K**
+的岗位（20-30K、25-30K 被排除；25-40K、30-50K 通过）。`exclude_companies`
+是公司黑名单：公司名包含任一关键词即永久不投，适合把投过很多次的巨头整个集团排掉。
+
+### ③ AI 写好的话术（messages.json，一条的样子）
+
+```json
+{
+  "msgs": {
+    "44bcea12e8bc3ada0nN62tu7E1tT": {
+      "text": "您好！看到岗位要求搭建 Agent 编排与 RAG 评测体系，正是我去年从 0 到 1 做过的：智能客服 Agent 平台上线后人工会话占比下降 40%，RAG 检索准确率做到 91%。评测这块也踩过坑，有一套现成的指标体系可以直接迁移。期待和您聊聊。"
+    }
+  }
+}
+```
+
+键是岗位 id（JD 详情页 URL 里的那串）；`text` 必须引用**该岗位 JD 的具体内容**、
+素材只来自 `resume.highlights`、结尾统一「期待和您聊聊。」、单条 120–220 字。
+写好后再运行发送端，只有出现在 `msgs` 里的岗位才会被投递（话术门禁）。
+
+> 完整字段说明见 [docs/1-usage-and-config.md](docs/1-usage-and-config.md)。
+
 ## 内置的负责任使用设计
 
 - **AI 话术门禁**：没有为该岗位逐条生成定制话术就不发送，杜绝群发模板。
