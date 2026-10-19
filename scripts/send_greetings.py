@@ -497,14 +497,27 @@ JD_EN_PATTERN = re.compile(
     r"native\s+speaker|fluent\s+in\s+english|english\s+as\s+a\s+working\s+language|"
     r"working\s+proficiency\s+in\s+english|"
     # 海外/留学信号：只认「紧邻」表述，避免误伤「985/211 及海外高校毕业者、有技术背景」这类学历偏好（2026-10-13 修）
-    r"(留学|海外)[^。；;，,\n]{0,3}(经历|背景|经验|留学)|"
+    # 2026-10-19 再修：去掉「经验」，否则「海外产品经验」「海外工作经验」这类加分项会被误判成英语硬要求
+    r"(留学|海外)[^。；;，,\n]{0,3}(经历|背景|学历|院校|毕业)|"
     r"海外(市场|业务|用户|客户)[^。；;，,\n]{0,4}(经验|经历|背景)", re.I)
+
+# 「加分 / 优先 / 更佳」上下文：命中英语词但只是加分项时不拦截（2026-10-19 新增）
+JD_EN_SOFT = re.compile(r"加分|优先|更佳|最好|可选|非必须|nice\s*to\s*have|preferred", re.I)
 
 
 def jd_requires_english(jd_text):
-    """JD 含强英语要求则返回命中片段（用于跳过），否则返回 ''。"""
-    m = JD_EN_PATTERN.search(norm_text(jd_text) or "")
-    return m.group(0) if m else ""
+    """JD 含强英语要求则返回命中片段（用于跳过），否则返回 ''。
+
+    2026-10-19：逐个命中项看上下文窗口，如果那条只是「加分项/优先」，不算硬门槛。
+    """
+    blob = norm_text(jd_text) or ""
+    for m in JD_EN_PATTERN.finditer(blob):
+        a = max(0, m.start() - 30)
+        b = min(len(blob), m.end() + 30)
+        if JD_EN_SOFT.search(blob[a:b]):
+            continue                       # 加分项里的英语不算硬要求
+        return m.group(0)
+    return ""
 
 
 # JD 显示岗位实质与「AI 产品 / 运营」方向错配（标题包装成 AI 岗，实为基建 / 算力 / 项目管理等）

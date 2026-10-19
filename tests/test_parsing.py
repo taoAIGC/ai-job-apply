@@ -81,5 +81,23 @@ class TestRiskPattern(unittest.TestCase):
             self.assertIsNone(sg.RISK_PATTERN.search(t), t)
 
 
+class TestEnglishGate(unittest.TestCase):
+    """英语门槛：硬要求要拦，加分项/海外经验不能误伤（2026-10-19 修）。"""
+
+    def test_hard_requirement_blocked(self):
+        for t in ("英语可作为工作语言", "英语流利，能与海外团队协作",
+                  "英文读写可以作为工作语言", "英语口语流利"):
+            self.assertTrue(sg.jd_requires_english(t), t)
+
+    def test_soft_context_not_blocked(self):
+        for t in ("英语可作为工作语言者优先", "英语流利为加分项",
+                  "具备英文阅读能力者优先考虑"):
+            self.assertEqual(sg.jd_requires_english(t), "", t)
+
+    def test_overseas_experience_not_english(self):
+        # 「海外产品经验」是业务经验，不是英语门槛
+        self.assertEqual(sg.jd_requires_english("加分项：有 AI 产品、视频、海外产品经验"), "")
+
+
 if __name__ == "__main__":
     unittest.main()
