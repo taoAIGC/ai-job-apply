@@ -493,6 +493,14 @@ def main():
                     help="岗位来源标记（channel:推荐 / channel:频道名 / search:档位码），用于候选排序")
     ap.add_argument("--skip-channels", action="store_true",
                     help="跳过频道阶段（推荐/求职意向标签），直接进入搜索")
+    ap.add_argument("--channel-low-yield", type=int, default=2,
+                    help="频道单轮新增 <= 该值算「低产出」（默认 2）")
+    ap.add_argument("--channel-dry-rounds", type=int, default=2,
+                    help="频道连续低产出几轮即判定枯竭、转搜索（默认 2）")
+    ap.add_argument("--gate-search-chunks", type=int, default=4,
+                    help="话术门禁处自动补搜的搜索块数（默认 4；0=关闭自动搜索）")
+    ap.add_argument("--gate-jd-limit", type=int, default=12,
+                    help="门禁收尾时建议抓取的 JD 条数（默认 12）")
     ap.add_argument("--target", type=int, default=0,
                     help="累计触达上限（可选，默认 0=不设上限）。默认不给自己定额度，"
                          "投到「没有可投岗位」或「平台提示当日上限」为止。")
@@ -604,6 +612,8 @@ def main():
     sent_since_rest = 0
     cycle = 0
     dry_streak = 0        # 跨周期累计的「招呼语发不出去」次数，用于识别静默封顶
+    ch_low = {}           # 频道 -> 连续「低产出」次数：+1/+2 连续几轮即视作枯竭
+    gate_searched = 0     # 话术门禁处已自动补搜的次数（防止无限搜）
     cap_desc = "不限（平台限额为准）" if unlimited else str(a.target)
     while (unlimited or len(contacted) < a.target) and cycle < a.max_cycles:
         cycle += 1
@@ -618,11 +628,24 @@ def main():
                         name, ch_rounds, a.session, addr, pool, a.pool,
                         src_map=src_map, src_path=a.src_file,
                         is_recommend=(name == "推荐"))
-                    if added > 0:
-                        channel_queue.append(name)   # 还有产出 → 排到频道队尾继续
+                    if added > a.channel_low_yield:
+                        channel_queue.append(name)   # 产出正常 → 排到频道队尾继续
+                        ch_low[name] = 0
+                    elif added > 0:
+                        # 低产出（+1/+2）：继续观察，连续若干轮都这么点就判定枯竭
+                        ch_low[name] = ch_low.get(name, 0) + 1
+                        if ch_low[name] >= a.channel_dry_rounds:
+                            print(f"  [channel {name}] 连续 {ch_low[name]} 轮仅 +{added}"
+                                  f" → 判定枯竭，不再排入队列", flush=True)
+                            ch_low.pop(name, None)
+                        else:
+                            channel_queue.append(name)
                     elif added == -1:
                         channel_queue.append(name)   # 标签未渲染/被弹走 → 下轮重试
-                    # added == 0 → 枯竭，丢弃该频道
+                    else:                            # added == 0 → 枯竭，丢弃该频道
+                        print(f"  [channel {name}] 无新岗位 → 丢弃", flush=True)
+                    if not channel_queue:
+                        print("  [switch] 频道标签已全部枯竭 → 自动进入搜索线", flush=True)
                 else:
                     if not search_queue:
                         search_queue = build_search_queue()
@@ -650,8 +673,28 @@ def main():
         print(f"  [select] 可投候选 {len(cands)}（频道 {ch_n} / 搜索 {len(cands)-ch_n}），"
               f"因缺 AI 话术暂缓 {no_msg} 条，本周期计划发 {a.per_cycle}", flush=True)
         if not a.allow_template and not cands and no_msg:
-            print("\n[话术门禁] 候选岗位都还没有 AI 话术，本轮无法投递。下一步：", flush=True)
-            print("  1) python3 scripts/fetch_jd.py --profile %s --limit 20" % a.profile, flush=True)
+            # 门禁：没有 AI 话术就不投。但不要就地停住——先把搜索线自动跑起来补量，
+            # 让新岗位（含 JD）落进池子，供 AI 写话术；搜够次数仍无话术才收尾。
+            if gate_searched < a.gate_search_chunks:
+                gate_searched += 1
+                channel_queue.clear()            # 标签页已无「有新岗位」的产出，直接转搜索
+                if not search_queue:
+                    search_queue = build_search_queue()
+                _, city, kw, code = search_queue.pop(0)
+                print(f"\n[gate] 标签页无新岗位 → 自动执行搜索"
+                      f"（{gate_searched}/{a.gate_search_chunks}）: {city}/{kw} @{code}", flush=True)
+                try:
+                    collect_chunk(city, kw, a.scrolls, a.session, addr, pool, a.pool,
+                                  salary_code=code, src_tag="search:" + code,
+                                  src_map=src_map, src_path=a.src_file)
+                except RiskHalt as e:
+                    mark_risk(str(e), where="collect")
+                    sys.exit(3)
+                pause(3.0, 7.0)
+                continue                          # 回到周期顶部重新选人
+            print("\n[话术门禁] 搜索补量后仍无「已写话术」的岗位，本轮收尾。下一步：", flush=True)
+            print("  1) python3 scripts/fetch_jd.py --profile %s --limit %d"
+                  % (a.profile, a.gate_jd_limit), flush=True)
             print("  2) 由 AI 读 %s 逐条分析 JD，生成话术写入 %s" % (paths.JD, a.ai_messages), flush=True)
             print("  3) 重新运行本流水线（会跳过已触达、只投有话术的岗位）", flush=True)
             sys.exit(6)
@@ -717,6 +760,7 @@ def main():
                     dry_streak += 1          # 招呼语压根没发出去，计入「静默封顶」观察
             if okk:
                 sent_this_cycle += 1
+                gate_searched = 0        # 投出去了说明补搜有效，下次门禁重新计数
                 sent_since_rest += 1
                 if sent_since_rest >= a.rest_every:
                     rest = random.uniform(25, 70)
