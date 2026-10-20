@@ -98,6 +98,30 @@ class TestEnglishGate(unittest.TestCase):
         # 「海外产品经验」是业务经验，不是英语门槛
         self.assertEqual(sg.jd_requires_english("加分项：有 AI 产品、视频、海外产品经验"), "")
 
+    def test_next_sentence_soft_label_not_leaking(self):
+        """2026-10-20：下一句的「加分项」不能污染本句的硬要求判定。"""
+        text = ("● 英语可作为工作语言,能与全球开发者和客户流畅沟通。"
+                " 加分项 ● 有个人开发的AI Agent或开源项目贡献者优先。")
+        self.assertTrue(sg.jd_requires_english(text))
+
+    def test_leading_soft_label_still_soft(self):
+        """「【加分项】…英语可作为工作语言」这种段首标签仍属加分项，要放行。"""
+        text = "【加分项】 具备海外市场或跨文化消费场景经验,英语可作为工作语言"
+        self.assertEqual(sg.jd_requires_english(text), "")
+
+    def test_numbered_list_not_polluted_by_later_soft(self):
+        """编号列表里第 3 条是英语硬要求，不能被第 5 条的「加分项」带跑。"""
+        text = ("3.有海外产品或出海产品经验,英语可作为工作语言 "
+                "4.懂AIGC内容生成管线(文生图/文生视频/TTS)的产品化 "
+                "5.自己是重度用户,加分项:有开源项目")
+        self.assertTrue(sg.jd_requires_english(text))
+
+    def test_dash_list_hard_requirement(self):
+        """「工作语言 - 英语可作为工作语言 - …」是硬要求，后面接加分项也不能放行。"""
+        text = ("工作语言 - 英语可作为工作语言 - 能够直接研究海外产品、用户和市场 "
+                "加分项 - 有开源项目贡献")
+        self.assertTrue(sg.jd_requires_english(text))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -504,18 +504,47 @@ JD_EN_PATTERN = re.compile(
 # 「加分 / 优先 / 更佳」上下文：命中英语词但只是加分项时不拦截（2026-10-19 新增）
 JD_EN_SOFT = re.compile(r"加分|优先|更佳|最好|可选|非必须|nice\s*to\s*have|preferred", re.I)
 
+# 一条「要求」的分界：句号、分号、换行、编号（1. 2、）、项目符号、连字符列表
+# 编号后面可能不带空格（如「3.有海外产品经验」），所以用 (?!\d) 只排除小数
+_CLAUSE_SEP = re.compile(r"[。；;]|\n|\d{1,2}[.、)](?!\d)|[●•]|·|\s-\s")
+
+
+def _en_clause(blob, start, end):
+    """取命中项所在的「一句」，用于判断这条英语要求本身是不是加分项。
+
+    2026-10-20 修：原来用固定 ±30 字窗口，会把紧跟在下一句的「加分项」三个字
+    算进本条英语要求的上下文，导致「英语可作为工作语言。加分项 ● 有开源项目」
+    这种硬要求被误放行。改为只取命中项所在的那一条：
+    句界 = 句号/分号/换行/编号(1. 2、)/项目符号(●/•)/连字符列表( - )。
+    这样「3. 英语可作为工作语言 4. 懂管线」不会被第 4 条的「加分项」污染。
+    「加分项：英语可作为工作语言」「【加分项】 …英语…」这类前缀仍算同一条。
+    """
+    a = 0
+    for m in _CLAUSE_SEP.finditer(blob, 0, start):
+        a = m.end()
+    b = len(blob)
+    m = _CLAUSE_SEP.search(blob, end)
+    if m:
+        b = m.start()
+    return blob[a:b]
+
 
 def jd_requires_english(jd_text):
     """JD 含强英语要求则返回命中片段（用于跳过），否则返回 ''。
 
     2026-10-19：逐个命中项看上下文窗口，如果那条只是「加分项/优先」，不算硬门槛。
+    2026-10-20：上下文窗口从固定 ±30 字改为「命中项所在句」，避免下一句的
+    「加分项」污染本条判定（实测放过过 3 条硬要求）。
     """
     blob = norm_text(jd_text) or ""
     for m in JD_EN_PATTERN.finditer(blob):
-        a = max(0, m.start() - 30)
-        b = min(len(blob), m.end() + 30)
-        if JD_EN_SOFT.search(blob[a:b]):
+        clause = _en_clause(blob, m.start(), m.end())
+        if JD_EN_SOFT.search(clause):
             continue                       # 加分项里的英语不算硬要求
+        # 句首可能是独立的标签行，如「【加分项】」+ 换行 + 「英语可作为工作语言」
+        head = blob[max(0, m.start() - 18):m.start()]
+        if JD_EN_SOFT.search(head) and not _CLAUSE_SEP.search(head):
+            continue
         return m.group(0)
     return ""
 
